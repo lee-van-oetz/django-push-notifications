@@ -116,56 +116,8 @@ def _gcm_send_plain(registration_id, data, **kwargs):
 
 
 def _gcm_send_json(registration_ids, data, **kwargs):
-	"""
-	Sends a GCM notification to one or more registration_ids. The registration_ids
-	needs to be a list.
-	This will send the notification as json data.
-	"""
-
-	values = {"registration_ids": registration_ids}
-
-	if data is not None:
-		values["data"] = data
-
-	for k, v in kwargs.items():
-		if v:
-			values[k] = v
-
-	data = json.dumps(values, separators=(",", ":"), sort_keys=True).encode("utf-8")  # keys sorted for tests
-
-	response = json.loads(_gcm_send(data))
-
-	if response["failure"] or response["canonical_ids"]:
-		ids_to_remove, old_new_ids = [], []
-		throw_error = False
-		for index, result in enumerate(response["results"]):
-			error = result.get("error")
-			if error:
-				# Information from Google docs (https://developers.google.com/cloud-messaging/http)
-				# If error is NotRegistered or InvalidRegistration, then we will deactivate devices because this
-				# registration ID is no more valid and can't be used to send messages, otherwise raise error
-				if error in ("NotRegistered", "InvalidRegistration"):
-					ids_to_remove.append(registration_ids[index])
-				else:
-					throw_error = True
-
-			# If registration_id is set, replace the original ID with the new value (canonical ID) in your
-			# server database. Note that the original ID is not part of the result, so you need to obtain it
-			# from the list of registration_ids passed in the request (using the same index).
-			new_id = result.get("registration_id")
-			if new_id:
-				old_new_ids.append((registration_ids[index], new_id))
-
-		if ids_to_remove:
-			removed = GCMDevice.objects.filter(registration_id__in=ids_to_remove)
-			removed.update(active=0)
-
-		for old_id, new_id in old_new_ids:
-			_gcm_handle_canonical_id(new_id, old_id)
-
-		if throw_error:
-			raise GCMError(response)
-	return response
+	for registration_id in registration_ids:
+		_gcm_send_plain(registration_id, data, **kwargs)
 
 
 def _gcm_handle_canonical_id(canonical_id, current_id):
