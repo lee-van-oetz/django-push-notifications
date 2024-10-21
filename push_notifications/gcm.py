@@ -69,6 +69,8 @@ def _gcm_send_plain(registration_id, data, **kwargs):
 	"""
 
 	for k, v in data.items():
+		if isinstance(v, unicode):
+			data[k] = v.encode("utf-8")
 		if not isinstance(v, str):
 			data[k] = str(v)
 
