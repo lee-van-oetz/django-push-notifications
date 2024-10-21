@@ -7,6 +7,8 @@ https://developer.android.com/google/gcm/index.html
 
 import json
 from .models import GCMDevice
+import google.auth.transport.requests
+from google.oauth2 import service_account
 
 
 try:
@@ -25,6 +27,15 @@ from .settings import PUSH_NOTIFICATIONS_SETTINGS as SETTINGS
 class GCMError(NotificationError):
 	pass
 
+def _get_access_token():
+	credentials = service_account.Credentials.from_service_account_file(
+		SETTINGS["FIREBASE_CREDENTIALS_FILE"],
+		scopes=['https://www.googleapis.com/auth/firebase.messaging']
+	)
+	request = google.auth.transport.requests.Request()
+	credentials.refresh(request)
+	return credentials.token
+
 
 def _chunks(l, n):
 	"""
@@ -34,18 +45,18 @@ def _chunks(l, n):
 		yield l[i:i + n]
 
 
-def _gcm_send(data, content_type):
-	key = SETTINGS.get("GCM_API_KEY")
-	if not key:
-		raise ImproperlyConfigured('You need to set PUSH_NOTIFICATIONS_SETTINGS["GCM_API_KEY"] to send messages through GCM.')
+def _gcm_send(data):
+	token = _get_access_token()
 
 	headers = {
-		"Content-Type": content_type,
-		"Authorization": "key=%s" % (key),
-		"Content-Length": str(len(data)),
+		'Content-Type': 'application/json; UTF-8',
+		'Authorization': 'Bearer ' + token,
 	}
+	with open(SETTINGS["FIREBASE_CREDENTIALS_FILE"], 'r') as f:
+		credentials = json.load(f)
 
-	request = Request(SETTINGS["GCM_POST_URL"], data, headers)
+	url = "https://fcm.googleapis.com/v1/projects/" + credentials['project_id'] + "/messages:send"
+	request = Request(url, data, headers)
 	return urlopen(request).read().decode("utf-8")
 
 
@@ -57,21 +68,30 @@ def _gcm_send_plain(registration_id, data, **kwargs):
 	gcm_send_bulk_message() with a list of registration_ids
 	"""
 
-	values = {"registration_id": registration_id}
-
-	for k, v in data.items():
-		values["data.%s" % (k)] = v.encode("utf-8")
+	msg_objects = {
+		'message': {
+			'token': registration_id,
+			'notification': {
+				'title': data.get('title'),
+				'body': data.get('message'),
+			},
+			'data': data,
+		},
+	}
 
 	for k, v in kwargs.items():
 		if v:
 			if isinstance(v, bool):
 				# Encode bools into ints
 				v = 1
-			values[k] = v
+			msg_objects['message']['data'][k] = str(v)
+			
+	for k, v in data.items():
+		data[k] = str(v)
 
-	data = urlencode(sorted(values.items())).encode("utf-8")  # sorted items for tests
+	data = json.dumps(msg_objects).encode("utf-8")
 
-	result = _gcm_send(data, "application/x-www-form-urlencoded;charset=UTF-8")
+	result = _gcm_send(data)
 
 	# Information about handling response from Google docs (https://developers.google.com/cloud-messaging/http):
 	# If first line starts with id, check second line:
