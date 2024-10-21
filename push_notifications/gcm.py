@@ -68,6 +68,10 @@ def _gcm_send_plain(registration_id, data, **kwargs):
 	gcm_send_bulk_message() with a list of registration_ids
 	"""
 
+	for k, v in data.items():
+		if not isinstance(v, str):
+			data[k] = str(v)
+
 	msg_objects = {
 		'message': {
 			'token': registration_id,
