@@ -84,9 +84,6 @@ def _gcm_send_plain(registration_id, data, **kwargs):
 			if isinstance(v, bool):
 				v = "1"
 			msg_objects[k] = v
-			
-	for k, v in data.items():
-		data[k] = str(v)
 
 	data = json.dumps(msg_objects).encode("utf-8")
 
