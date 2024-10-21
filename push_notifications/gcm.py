@@ -82,9 +82,8 @@ def _gcm_send_plain(registration_id, data, **kwargs):
 	for k, v in kwargs.items():
 		if v:
 			if isinstance(v, bool):
-				# Encode bools into ints
-				v = 1
-			msg_objects['message']['data'][k] = str(v)
+				v = "1"
+			msg_objects[k] = v
 			
 	for k, v in data.items():
 		data[k] = str(v)
@@ -134,7 +133,8 @@ def _gcm_send_json(registration_ids, data, **kwargs):
 
 	data = json.dumps(values, separators=(",", ":"), sort_keys=True).encode("utf-8")  # keys sorted for tests
 
-	response = json.loads(_gcm_send(data, "application/json"))
+	response = json.loads(_gcm_send(data))
+
 	if response["failure"] or response["canonical_ids"]:
 		ids_to_remove, old_new_ids = [], []
 		throw_error = False
